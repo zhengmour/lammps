@@ -13,6 +13,7 @@ Accelrys
 acceptor
 Acceptor
 acceptors
+accessor
 accomx
 accomy
 accomz
@@ -1346,6 +1347,7 @@ hiID
 Hijazi
 Hilger
 Hinestrosa
+hipCUB
 hipFFT
 histo
 histogrammed
@@ -1622,6 +1624,7 @@ kb
 kB
 kbit
 kbits
+kbond
 kcal
 kcl
 Kd
