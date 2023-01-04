@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/ Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -44,12 +44,15 @@ class PairAmoeba : public Pair {
   int pack_reverse_comm(int, int, double *) override;
   void unpack_reverse_comm(int, int *, double *) override;
 
+  void reset_grid() override;
+
   void pack_forward_grid(int, void *, int, int *) override;
   void unpack_forward_grid(int, void *, int, int *) override;
   void pack_reverse_grid(int, void *, int, int *) override;
   void unpack_reverse_grid(int, void *, int, int *) override;
 
   void *extract(const char *, int &) override;
+  void *extract_peratom(const char *, int &) override;
   double memory_usage() override;
 
  protected:

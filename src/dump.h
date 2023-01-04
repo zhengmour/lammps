@@ -1,7 +1,7 @@
 /* -*- c++ -*- ----------------------------------------------------------
    LAMMPS - Large-scale Atomic/Molecular Massively Parallel Simulator
    https://www.lammps.org/, Sandia National Laboratories
-   Steve Plimpton, sjplimp@sandia.gov
+   LAMMPS development team: developers@lammps.org
 
    Copyright (2003) Sandia Corporation.  Under the terms of Contract
    DE-AC04-94AL85000 with Sandia Corporation, the U.S. Government retains
@@ -96,6 +96,10 @@ class Dump : protected Pointers {
   int refreshflag;    // 1 if dump_modify refresh specified
   char *refresh;      // compute ID to invoke refresh() on
   int irefresh;       // index of compute
+
+  int skipflag;     // 1 if skip condition defined
+  char *skipvar;    // name of variable to check for skip condition
+  int skipindex;    // index of skip variable
 
   char boundstr[9];    // encoding of boundary flags
 

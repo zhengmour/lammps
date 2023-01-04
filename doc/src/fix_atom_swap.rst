@@ -63,7 +63,8 @@ be needed when running such a hybrid simulation, especially if the
 swapped atoms are not well equilibrated.
 
 The *types* keyword is required. At least two atom types must be
-specified.
+specified. If not using *semi-grand*, exactly two atom types
+are required.
 
 The *ke* keyword can be set to *no* to turn off kinetic energy
 conservation for swaps. The default is *yes*, which means that swapped
@@ -167,7 +168,7 @@ the following global cumulative quantities:
 * 1 = swap attempts
 * 2 = swap accepts
 
-The vector values calculated by this fix are "extensive."
+The vector values calculated by this fix are "extensive".
 
 No parameter of this fix can be used with the *start/stop* keywords of
 the :doc:`run <run>` command.  This fix is not invoked during

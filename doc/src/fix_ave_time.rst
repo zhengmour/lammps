@@ -28,7 +28,7 @@ Syntax
        v_name[I] = value calculated by a vector-style variable with name, I can include wildcard (see below)
 
 * zero or more keyword/arg pairs may be appended
-* keyword = *mode* or *file* or *ave* or *start* or *off* or *overwrite* or *title1* or *title2* or *title3*
+* keyword = *mode* or *file* or *ave* or *start* or *off* or *overwrite* or *format* or *title1* or *title2* or *title3*
 
   .. parsed-literal::
 
@@ -358,11 +358,11 @@ of rows = length of the input vectors and # of columns = number of
 inputs.
 
 If the fix produces a scalar or vector, then the scalar and each
-element of the vector can be either "intensive" or "extensive,"
+element of the vector can be either "intensive" or "extensive",
 depending on whether the values contributing to the scalar or vector
-element are "intensive" or "extensive."  If the fix produces an array,
+element are "intensive" or "extensive".  If the fix produces an array,
 then all elements in the array must be the same, either "intensive" or
-"extensive."  If a compute or fix provides the value being time
+"extensive".  If a compute or fix provides the value being time
 averaged, then the compute or fix determines whether the value is
 intensive or extensive; see the page for that compute or fix for
 further info.  Values produced by a variable are treated as intensive.
