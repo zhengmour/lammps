@@ -98,6 +98,8 @@ PairPACEExtrapolation::PairPACEExtrapolation(LAMMPS *lmp) : Pair(lmp)
   scale = nullptr;
   flag_compute_extrapolation_grade = 0;
   extrapolation_grade_gamma = nullptr;
+
+  chunksize = 4096;
 }
 
 /* ----------------------------------------------------------------------
@@ -133,15 +135,11 @@ void PairPACEExtrapolation::compute(int eflag, int vflag)
 
   double **x = atom->x;
   double **f = atom->f;
-  tagint *tag = atom->tag;
   int *type = atom->type;
   // number of atoms in cell
   int nlocal = atom->nlocal;
 
   int newton_pair = force->newton_pair;
-
-  // number of atoms including ghost atoms
-  int nall = nlocal + atom->nghost;
 
   // inum: length of the neighborlists list
   inum = list->inum;
@@ -204,8 +202,10 @@ void PairPACEExtrapolation::compute(int eflag, int vflag)
     // jnum(0) = 50
     // jlist(neigh ind of 0-atom) = [1,2,10,7,99,25, .. 50 element in total]
     try {
-      if (flag_compute_extrapolation_grade)
+      if (flag_compute_extrapolation_grade) {
+        aceimpl->ace->compute_projections = true;
         aceimpl->ace->compute_atom(i, x, type, jnum, jlist);
+      }
       else
         aceimpl->rec_ace->compute_atom(i, x, type, jnum, jlist);
     } catch (std::exception &e) {
@@ -283,7 +283,20 @@ void PairPACEExtrapolation::allocate()
 
 void PairPACEExtrapolation::settings(int narg, char **arg)
 {
-  if (narg > 0) error->all(FLERR, "Pair style pace/extrapolation supports no keywords");
+//  if (narg > 2) error->all(FLERR, "Pair style pace/extrapolation supports no keywords");
+  if (narg > 2) utils::missing_cmd_args(FLERR, "pair_style pace/extrapolation", error);
+  // ACE potentials are parameterized in metal units
+  if (strcmp("metal", update->unit_style) != 0)
+    error->all(FLERR, "ACE potentials require 'metal' units");
+
+  int iarg = 0;
+  while (iarg < narg) {
+      if (strcmp(arg[iarg], "chunksize") == 0) {
+          chunksize = utils::inumeric(FLERR, arg[iarg + 1], false, lmp);
+          iarg += 2;
+      } else
+          error->all(FLERR, "Unknown pair_style pace keyword: {}", arg[iarg]);
+  }
 
   if (comm->me == 0)
     utils::logmesg(lmp, "ACE/AL version: {}.{}.{}\n", VERSION_YEAR, VERSION_MONTH, VERSION_DAY);
@@ -343,7 +356,6 @@ void PairPACEExtrapolation::coeff(int narg, char **arg)
   aceimpl->rec_ace->element_type_mapping.init(atom->ntypes + 1);
   aceimpl->rec_ace->element_type_mapping.fill(-1);    //-1 means atom not included into potential
 
-  FILE *species_type_file = nullptr;
 
   const int n = atom->ntypes;
   element_names.resize(n);

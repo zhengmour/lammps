@@ -24,7 +24,7 @@ Syntax
 * color = atom attribute that determines color of each atom
 * diameter = atom attribute that determines size of each atom
 * zero or more keyword/value pairs may be appended
-* keyword = *atom* or *adiam* or *bond* or *grid* or *line* or *tri* or *body* or *fix* or *size* or *view* or *center* or *up* or *zoom* or *box* or *axes* or *subbox* or *shiny* or *ssao*
+* keyword = *atom* or *adiam* or *bond* or *grid* or *line* or *tri* or *body* or *fix* or *size* or *view* or *center* or *up* or *zoom* or *box* or *axes* or *subbox* or *shiny* or *fsaa* or *ssao*
 
   .. parsed-literal::
 
@@ -80,11 +80,13 @@ Syntax
          axes = *yes* or *no* = do or do not draw xyz axes lines next to simulation box
          length = length of axes lines as fraction of respective box lengths
          diam = diameter of axes lines as fraction of shortest box length
-       *subbox* values = lines diam = draw outline of processor sub-domains
-         lines = *yes* or *no* = do or do not draw sub-domain lines
-         diam = diameter of sub-domain lines as fraction of shortest box length
+       *subbox* values = lines diam = draw outline of processor subdomains
+         lines = *yes* or *no* = do or do not draw subdomain lines
+         diam = diameter of subdomain lines as fraction of shortest box length
        *shiny* value = sfactor = shinyness of spheres and cylinders
          sfactor = shinyness of spheres and cylinders from 0.0 to 1.0
+       *fsaa* arg = yes/no
+         yes/no = do or do not apply anti-aliasing
        *ssao* value = shading seed dfactor = SSAO depth shading
          shading = *yes* or *no* = turn depth shading on/off
          seed = random # seed (positive integer)
@@ -98,7 +100,7 @@ dump_modify options for dump image/movie
 Syntax
 """"""
 
-.. parsed-literal::
+.. code-block:: LAMMPS
 
    dump_modify dump-ID keyword values ...
 
@@ -145,7 +147,7 @@ Syntax
        *bitrate* arg = rate
          rate = target bitrate for movie in kbps
        *boxcolor* arg = color
-         color = name of color for simulation box lines and processor sub-domain lines
+         color = name of color for simulation box lines and processor subdomain lines
        *color* args = name R G B
          name = name of color
          R,G,B = red/green/blue numeric values from 0.0 to 1.0
@@ -218,16 +220,16 @@ is used.
 .. _png_format: https://en.wikipedia.org/wiki/Portable_Network_Graphics
 .. _ppm_format: https://en.wikipedia.org/wiki/Netpbm
 
-Similarly, the format of the resulting movie is chosen with the
-*movie* dump style. This is handled by the underlying FFmpeg converter
-and thus details have to be looked up in the `FFmpeg documentation
-<https://ffmpeg.org/ffmpeg.html>`_.  Typical examples are: .avi, .mpg,
-.m4v, .mp4, .mkv, .flv, .mov, .gif Additional settings of the movie
-compression like *bitrate* and *framerate* can be set using the
-dump_modify command as described below.
+Similarly, the format of the resulting movie is chosen with the *movie*
+dump style. This is handled by the underlying FFmpeg converter and thus
+details have to be looked up in the `FFmpeg documentation
+<https://ffmpeg.org/>`_.  Typical examples are: .avi, .mpg, .m4v, .mp4,
+.mkv, .flv, .mov, .gif Additional settings of the movie compression like
+*bitrate* and *framerate* can be set using the dump_modify command as
+described below.
 
 To write out JPEG and PNG format files, you must build LAMMPS with
-support for the corresponding JPEG or PNG library. To convert images
+support for the corresponding JPEG or PNG library.  To convert images
 into movies, LAMMPS has to be compiled with the -DLAMMPS_FFMPEG
 flag. See the :doc:`Build settings <Build_settings>` page for
 details.
@@ -255,7 +257,7 @@ one image file per snapshot is written.  The "\*" character is replaced
 with the timestep value.  For example, tmp.dump.\*.jpg becomes
 tmp.dump.0.jpg, tmp.dump.10000.jpg, tmp.dump.20000.jpg, etc.  Note
 that the :doc:`dump_modify pad <dump_modify>` command can be used to
-insure all timestep numbers are the same length (e.g., 00010), which
+ensure all timestep numbers are the same length (e.g., 00010), which
 can make it easier to convert a series of images into a movie in the
 correct ordering.
 
@@ -581,13 +583,13 @@ respective box lengths.  The *diam* setting determines their thickness
 as a fraction of the shortest box length in x,y,z (for 3d) or x,y (for
 2d).
 
-The *subbox* keyword determines if and how processor sub-domain
+The *subbox* keyword determines if and how processor subdomain
 boundaries are rendered as thin cylinders in the image.  If *no* is
-set (default), then the sub-domain boundaries are not drawn and the
+set (default), then the subdomain boundaries are not drawn and the
 *diam* setting is ignored.  If *yes* is set, the 12 edges of each
-processor sub-domain are drawn, with a diameter that is a fraction of
+processor subdomain are drawn, with a diameter that is a fraction of
 the shortest box length in x,y,z (for 3d) or x,y (for 2d).  The color
-of the sub-domain boundaries can be set with the "dump_modify
+of the subdomain boundaries can be set with the "dump_modify
 boxcolor" command.
 
 ----------
@@ -597,13 +599,47 @@ image will appear.  The *sfactor* value must be a value 0.0 <=
 *sfactor* <= 1.0, where *sfactor* = 1 is a highly reflective surface
 and *sfactor* = 0 is a rough non-shiny surface.
 
-The *ssao* keyword turns on/off a screen space ambient occlusion
-(SSAO) model for depth shading.  If *yes* is set, then atoms further
-away from the viewer are darkened via a randomized process, which is
-perceived as depth.  The calculation of this effect can increase the
-cost of computing the image by roughly 2x.  The strength of the effect
-can be scaled by the *dfactor* parameter.  If *no* is set, no depth
-shading is performed.
+.. versionadded:: 21Nov2023
+
+The *fsaa* keyword can be used with the dump image command to improve
+the image quality by enabling full scene anti-aliasing.  Internally the
+image is rendered at twice the width and height and then scaled down by
+computing the average of each 2x2 block of pixels to produce a single
+pixel in the final image at the original size. This produces images with
+smoother, less ragged edges.  The application of this algorithm can
+increase the cost of computing the image by about 3x or more.
+
+The *ssao* keyword turns on/off a screen space ambient occlusion (SSAO)
+model for depth shading.  If *yes* is set, then atoms further away from
+the viewer are darkened via a randomized process, which is perceived as
+depth.  The strength of the effect can be scaled by the *dfactor*
+parameter.  If *no* is set, no depth shading is performed.  The
+calculation of this effect can increase the cost of computing the image
+substantially by 5x or more, especially with larger images.  When used
+in combination with the *fsaa* keyword the computational cost of depth
+shading is particularly large.
+
+----------
+
+Image Quality Settings
+""""""""""""""""""""""
+
+The two keywords *fsaa* and *ssao* can be used to improve the image
+quality at the expense of additional computational cost to render the
+images. The images below show from left to right the same render with
+default settings, with *fsaa* added, with *ssao* added, and with both
+keywords added.
+
+.. |imagequality1| image:: JPG/image.default.png
+   :width: 24%
+.. |imagequality2| image:: JPG/image.fsaa.png
+   :width: 24%
+.. |imagequality3| image:: JPG/image.ssao.png
+   :width: 24%
+.. |imagequality4| image:: JPG/image.both.png
+   :width: 24%
+
+|imagequality1|  |imagequality2|  |imagequality3|  |imagequality4|
 
 ----------
 
@@ -621,8 +657,8 @@ MPEG or other movie file you can use:
 
   .. code-block:: bash
 
-     % convert *.jpg foo.gif
-     % convert -loop 1 *.ppm foo.mpg
+     convert *.jpg foo.gif
+     convert -loop 1 *.ppm foo.mpg
 
   Animated GIF files from ImageMagick are not optimized. You can use
   a program like gifsicle to optimize and thus massively shrink them.
@@ -651,7 +687,7 @@ MPEG or other movie file you can use:
      cat snap.*.ppm | ffmpeg -y -f image2pipe -c:v ppm -i - -b:v 2400k movie.avi
 
   Front ends for FFmpeg exist for multiple platforms. For more
-  information see the `FFmpeg homepage <https://www.ffmpeg.org/>`_
+  information see the `FFmpeg homepage <https://ffmpeg.org/>`_
 
 ----------
 
@@ -668,8 +704,8 @@ Play the movie:
 
   .. code-block:: bash
 
-     % mplayer foo.mpg
-     % ffplay bar.avi
+     mplayer foo.mpg
+     ffplay bar.avi
 
 * c) Use the `Pizza.py <https://lammps.github.io/pizza>`_
   `animate tool <https://lammps.github.io/pizza/doc/animate.html>`_,
@@ -679,7 +715,7 @@ Play the movie:
 
      a = animate("foo*.jpg")
 
-* d) QuickTime and other Windows- or MacOS-based media players can
+* d) QuickTime and other Windows- or macOS-based media players can
   obviously play movie files directly. Similarly for corresponding tools
   bundled with Linux desktop environments.  However, due to licensing
   issues with some file formats, the formats may require installing
@@ -921,8 +957,8 @@ formats.
 
 The *boxcolor* keyword sets the color of the simulation box drawn
 around the atoms in each image as well as the color of processor
-sub-domain boundaries.  See the "dump image box" command for how to
-specify that a box be drawn via the *box* keyword, and the sub-domain
+subdomain boundaries.  See the "dump image box" command for how to
+specify that a box be drawn via the *box* keyword, and the subdomain
 boundaries via the *subbox* keyword.  The color name can be any of the
 140 pre-defined colors (see below) or a color name defined by the
 dump_modify color option.
@@ -1051,6 +1087,7 @@ The defaults for the dump_modify keywords specific to dump image and dump movie 
 * boxcolor = yellow
 * color = 140 color names are pre-defined as listed below
 * framerate = 24
+* fsaa = no
 * gmap = min max cf 0.0 2 min blue max red
 
 ----------

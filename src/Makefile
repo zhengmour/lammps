@@ -44,11 +44,13 @@ endif
 # PACKLIB    = all packages that require an additional lib
 #              should be PACKSYS + PACKINT + PACKEXT
 # PACKSYS    = subset that reqiure a common system library
-#              include MPIIO and LB b/c require full MPI, not just STUBS
+#              include LATBOLTZ b/c it requires a full MPI, not just STUBS
 # PACKINT    = subset that require an internal (provided) library
 # PACKEXT    = subset that require an external (downloaded) library
 
 PACKAGE = \
+	molecule \
+	kspace \
 	adios \
 	amoeba \
 	asphere \
@@ -85,9 +87,8 @@ PACKAGE = \
 	interlayer \
 	kim \
 	kokkos \
-	kspace \
 	latboltz \
-	latte \
+	lepton \
 	machdyn \
 	manifold \
 	manybody \
@@ -104,10 +105,7 @@ PACKAGE = \
 	ml-rann \
 	ml-snap \
 	mofff \
-	molecule \
 	molfile \
-	mpiio \
-	mscg \
 	netcdf \
 	openmp \
 	opt \
@@ -145,15 +143,17 @@ PACKAGE = \
 # NOTE: the last four packages must remain at the end since
 # they depend on other packages to be installed first.
 
-PACKBASIC = kspace manybody molecule rigid
+PACKBASIC = molecule kspace manybody rigid
 
 PACKMOST = \
+	kspace \
+	molecule \
 	amoeba \
 	asphere \
 	bocs \
 	body \
 	bpm \
-        brownian \
+	brownian \
 	cg-dna \
 	cg-spica \
 	class2 \
@@ -175,14 +175,13 @@ PACKMOST = \
 	fep \
 	granular \
 	interlayer \
-	kspace \
 	manybody \
 	mc \
 	meam \
+	mesont \
 	misc \
 	ml-snap \
 	mofff \
-	molecule \
 	openmp \
 	opt \
 	orient \
@@ -211,9 +210,7 @@ PACKLIB = \
 	gpu \
 	kim \
 	kokkos \
-	latte \
-	mpiio \
-	mscg \
+	lepton \
 	poems \
 	python \
 	voronoi \
@@ -224,8 +221,8 @@ PACKLIB = \
 	h5md \
 	ml-hdnnp \
 	latboltz \
+	lepton \
 	mdi \
-	mesont \
 	molfile \
 	netcdf \
 	ml-pace \
@@ -238,21 +235,19 @@ PACKLIB = \
 	vtk \
 	electrode
 
-PACKSYS = compress latboltz mpiio python
+PACKSYS = compress latboltz python
 
-PACKINT = atc awpmd colvars electrode gpu kokkos mesont ml-pod poems
+PACKINT = atc awpmd colvars electrode gpu kokkos lepton ml-pod poems
 
 PACKEXT = \
 	adios \
 	h5md \
 	kim \
-	latte \
 	machdyn \
 	ml-hdnnp \
 	ml-pace \
 	ml-quip \
 	molfile \
-	mscg \
 	netcdf \
 	plumed \
 	qmmm \
@@ -465,7 +460,7 @@ mpi-stubs:
 sinclude ../lib/python/Makefile.lammps
 install-python:
 	@rm -rf ../python/build
-	@$(PYTHON) ../python/install.py -p ../python/lammps -l ../src/liblammps.so -w $(PWD)
+	@$(PYTHON) ../python/install.py -p ../python/lammps -l ../src/liblammps.so -w $(PWD) -v $(PWD)/version.h
 
 # Create a tarball of src dir and packages
 
@@ -635,6 +630,8 @@ lib-%:
 	else \
 	  echo "Install script for lib $(@:lib-%=%) does not exist"; \
 	fi; touch main.cpp
+
+lib-colvars: lib-lepton
 
 # status = list src files that differ from package files
 # installed = list of installed packages

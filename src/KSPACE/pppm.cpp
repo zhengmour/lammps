@@ -238,7 +238,7 @@ void PPPM::init()
   cutoff = *p_cutoff;
 
   // if kspace is TIP4P, extract TIP4P params from pair style
-  // bond/angle are not yet init(), so insure equilibrium request is valid
+  // bond/angle are not yet init(), so ensure equilibrium request is valid
 
   qdist = 0.0;
 
@@ -3004,7 +3004,7 @@ double PPPM::memory_usage()
 
   if (group_allocate_flag) {
     bytes += (double)2 * nbrick * sizeof(FFT_SCALAR);
-    bytes += (double)2 * nfft_both * sizeof(FFT_SCALAR);;
+    bytes += (double)2 * nfft_both * sizeof(FFT_SCALAR);
   }
 
   // two Grid3d bufs

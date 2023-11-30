@@ -20,7 +20,7 @@
 !   University of Missouri, 2012-2020
 !
 ! Contributing authors:
-!  - Axel Kohlmeyer <akohlmey@gmail.com>, Temple University, 2020-2022
+!  - Axel Kohlmeyer <akohlmey@gmail.com>, Temple University, 2020-2023
 !  - Karl D. Hammond <hammondkd@missouri.edu>, University of Missouri, 2022
 !
 ! The Fortran module tries to follow the API of the C library interface
@@ -44,11 +44,12 @@ MODULE LIBLAMMPS
   ! Data type constants for extracting data from global, atom, compute, and fix
   !
   ! Must be kept in sync with the equivalent declarations in
-  ! src/library.h, python/lammps/constants.py, tools/swig/lammps.i,
+  ! src/library.h, src/lmptype.h, python/lammps/constants.py, tools/swig/lammps.i,
   ! and examples/COUPLE/plugin/liblammpsplugin.h
   !
   ! These are NOT part of the API (the part the user sees)
   INTEGER(c_int), PARAMETER :: &
+    LAMMPS_NONE = -1, &       ! no data type assigned (yet)
     LAMMPS_INT = 0, &         ! 32-bit integer (or array)
     LAMMPS_INT_2D = 1, &      ! two-dimensional 32-bit integer array
     LAMMPS_DOUBLE = 2, &      ! 64-bit double (or array)
@@ -87,10 +88,15 @@ MODULE LIBLAMMPS
     INTEGER(c_int) :: scalar, vector, array
   END TYPE lammps_type
 
+  TYPE lammps_dtype
+    INTEGER(c_int) :: i32, i64, r64, str
+  END TYPE lammps_dtype
+
   TYPE lammps
     TYPE(c_ptr) :: handle = c_null_ptr
     TYPE(lammps_style) :: style
     TYPE(lammps_type) :: type
+    TYPE(lammps_dtype) :: dtype
   CONTAINS
     PROCEDURE :: close                  => lmp_close
     PROCEDURE :: error                  => lmp_error
@@ -100,6 +106,7 @@ MODULE LIBLAMMPS
     PROCEDURE :: commands_string        => lmp_commands_string
     PROCEDURE :: get_natoms             => lmp_get_natoms
     PROCEDURE :: get_thermo             => lmp_get_thermo
+    PROCEDURE :: last_thermo            => lmp_last_thermo
     PROCEDURE :: extract_box            => lmp_extract_box
     PROCEDURE :: reset_box              => lmp_reset_box
     PROCEDURE :: memory_usage           => lmp_memory_usage
@@ -135,6 +142,18 @@ MODULE LIBLAMMPS
     PROCEDURE, PRIVATE :: lmp_gather_bonds_big
     GENERIC   :: gather_bonds           => lmp_gather_bonds_small, &
                                            lmp_gather_bonds_big
+    PROCEDURE, PRIVATE :: lmp_gather_angles_small
+    PROCEDURE, PRIVATE :: lmp_gather_angles_big
+    GENERIC   :: gather_angles          => lmp_gather_angles_small, &
+                                           lmp_gather_angles_big
+    PROCEDURE, PRIVATE :: lmp_gather_dihedrals_small
+    PROCEDURE, PRIVATE :: lmp_gather_dihedrals_big
+    GENERIC   :: gather_dihedrals       => lmp_gather_dihedrals_small, &
+                                           lmp_gather_dihedrals_big
+    PROCEDURE, PRIVATE :: lmp_gather_impropers_small
+    PROCEDURE, PRIVATE :: lmp_gather_impropers_big
+    GENERIC   :: gather_impropers       => lmp_gather_impropers_small, &
+                                           lmp_gather_impropers_big
     PROCEDURE, PRIVATE :: lmp_gather_int
     PROCEDURE, PRIVATE :: lmp_gather_double
     GENERIC   :: gather                 => lmp_gather_int, lmp_gather_double
@@ -231,7 +250,7 @@ MODULE LIBLAMMPS
   END TYPE lammps_data_baseclass
 
   ! Derived type for receiving LAMMPS data (in lieu of the ability to type cast
-  ! pointers). Used for extract_compute, extract_atom
+  ! pointers). Used for extract_compute, extract_atom, last_thermo
   TYPE, EXTENDS(lammps_data_baseclass) :: lammps_data
     INTEGER(c_int), POINTER :: i32 => NULL()
     INTEGER(c_int), DIMENSION(:), POINTER :: i32_vec => NULL()
@@ -427,6 +446,15 @@ MODULE LIBLAMMPS
       TYPE(c_ptr), INTENT(IN), VALUE :: name
     END FUNCTION lammps_get_thermo
 
+    FUNCTION lammps_last_thermo(handle,what,index) BIND(C)
+      IMPORT :: c_ptr, c_int
+      IMPLICIT NONE
+      TYPE(c_ptr) :: lammps_last_thermo
+      TYPE(c_ptr), INTENT(IN), VALUE :: handle
+      TYPE(c_ptr), INTENT(IN), VALUE :: what
+      INTEGER(c_int), INTENT(IN), VALUE :: index
+    END FUNCTION lammps_last_thermo
+
     SUBROUTINE lammps_extract_box(handle,boxlo,boxhi,xy,yz,xz,pflags, &
         boxflag) BIND(C)
       IMPORT :: c_ptr, c_double, c_int
@@ -572,6 +600,24 @@ MODULE LIBLAMMPS
       IMPLICIT NONE
       TYPE(c_ptr), VALUE :: handle, data
     END SUBROUTINE lammps_gather_bonds
+
+    SUBROUTINE lammps_gather_angles(handle, data) BIND(C)
+      IMPORT :: c_ptr
+      IMPLICIT NONE
+      TYPE(c_ptr), VALUE :: handle, data
+    END SUBROUTINE lammps_gather_angles
+
+    SUBROUTINE lammps_gather_dihedrals(handle, data) BIND(C)
+      IMPORT :: c_ptr
+      IMPLICIT NONE
+      TYPE(c_ptr), VALUE :: handle, data
+    END SUBROUTINE lammps_gather_dihedrals
+
+    SUBROUTINE lammps_gather_impropers(handle, data) BIND(C)
+      IMPORT :: c_ptr
+      IMPLICIT NONE
+      TYPE(c_ptr), VALUE :: handle, data
+    END SUBROUTINE lammps_gather_impropers
 
     SUBROUTINE lammps_gather(handle, name, type, count, data) BIND(C)
       IMPORT :: c_ptr, c_int
@@ -965,6 +1011,10 @@ CONTAINS
     lmp_open%type%scalar = LMP_TYPE_SCALAR
     lmp_open%type%vector = LMP_TYPE_VECTOR
     lmp_open%type%array = LMP_TYPE_ARRAY
+    lmp_open%dtype%i32 = LAMMPS_INT
+    lmp_open%dtype%i64 = LAMMPS_INT64
+    lmp_open%dtype%r64 = LAMMPS_DOUBLE
+    lmp_open%dtype%str = LAMMPS_STRING
 
     ! Assign constants for bigint and tagint for use elsewhere
     SIZE_TAGINT = lmp_extract_setting(lmp_open, 'tagint')
@@ -1072,6 +1122,67 @@ CONTAINS
     lmp_get_thermo = lammps_get_thermo(self%handle, Cname)
     CALL lammps_free(Cname)
   END FUNCTION lmp_get_thermo
+
+  ! equivalent function to lammps_last_thermo
+  FUNCTION lmp_last_thermo(self,what,index) RESULT(thermo_data)
+    CLASS(lammps), INTENT(IN), TARGET :: self
+    CHARACTER(LEN=*), INTENT(IN) :: what
+    INTEGER :: index
+    INTEGER(c_int) :: idx
+    TYPE(lammps_data) :: thermo_data, type_data
+    INTEGER(c_int) :: datatype
+    TYPE(c_ptr) :: Cname, Cptr
+
+    idx = index - 1
+    ! set data type for known cases
+    SELECT CASE (what)
+    CASE ('step')
+        IF (SIZE_BIGINT == 4_c_int) THEN
+            datatype = LAMMPS_INT
+        ELSE
+            datatype = LAMMPS_INT64
+        END IF
+    CASE ('num')
+        datatype = LAMMPS_INT
+    CASE ('type')
+        datatype = LAMMPS_INT
+    CASE ('keyword')
+        datatype = LAMMPS_STRING
+    CASE ('data')
+        Cname = f2c_string('type')
+        Cptr = lammps_last_thermo(self%handle,Cname,idx)
+        type_data%lammps_instance => self
+        type_data%datatype = DATA_INT
+        CALL C_F_POINTER(Cptr, type_data%i32)
+        datatype = type_data%i32
+        CALL lammps_free(Cname)
+    CASE DEFAULT
+        datatype = -1
+    END SELECT
+
+    Cname = f2c_string(what)
+    Cptr = lammps_last_thermo(self%handle,Cname,idx)
+    CALL lammps_free(Cname)
+
+    thermo_data%lammps_instance => self
+    SELECT CASE (datatype)
+    CASE (LAMMPS_INT)
+        thermo_data%datatype = DATA_INT
+        CALL C_F_POINTER(Cptr, thermo_data%i32)
+    CASE (LAMMPS_INT64)
+        thermo_data%datatype = DATA_INT64
+        CALL C_F_POINTER(Cptr, thermo_data%i64)
+    CASE (LAMMPS_DOUBLE)
+        thermo_data%datatype = DATA_DOUBLE
+        CALL C_F_POINTER(Cptr, thermo_data%r64)
+    CASE (LAMMPS_STRING)
+        thermo_data%datatype = DATA_STRING
+        thermo_data%str = c2f_string(Cptr)
+    CASE DEFAULT
+        CALL lmp_error(self, LMP_ERROR_ALL + LMP_ERROR_WORLD, &
+          'Unknown pointer type in last_thermo')
+    END SELECT
+  END FUNCTION lmp_last_thermo
 
   ! equivalent subroutine to lammps_extract_box
   SUBROUTINE lmp_extract_box(self, boxlo, boxhi, xy, yz, xz, pflags, boxflag)
@@ -1875,6 +1986,132 @@ CONTAINS
     Cdata = C_LOC(data(1))
     CALL lammps_gather_bonds(self%handle, Cdata)
   END SUBROUTINE lmp_gather_bonds_big
+
+  ! equivalent function to lammps_gather_angles (LAMMPS_SMALLSMALL or SMALLBIG)
+  SUBROUTINE lmp_gather_angles_small(self, data)
+    CLASS(lammps), INTENT(IN) :: self
+    INTEGER(c_int), DIMENSION(:), ALLOCATABLE, TARGET, INTENT(OUT) :: data
+    INTEGER(c_int), POINTER :: nangles_small
+    INTEGER(c_int64_t), POINTER :: nangles_big
+    TYPE(c_ptr) :: Cdata
+
+    IF (SIZE_TAGINT /= 4_c_int) THEN
+      CALL lmp_error(self, LMP_ERROR_ALL + LMP_ERROR_WORLD, &
+        'Incompatible integer kind in gather_angles [Fortran/gather_angles]')
+    END IF
+    IF (ALLOCATED(data)) DEALLOCATE(data)
+    IF (SIZE_BIGINT == 4_c_int) THEN
+      nangles_small = lmp_extract_global(self, 'nangles')
+      ALLOCATE(data(4*nangles_small))
+    ELSE
+      nangles_big = lmp_extract_global(self, 'nangles')
+      ALLOCATE(data(4*nangles_big))
+    END IF
+    Cdata = C_LOC(data(1))
+    CALL lammps_gather_angles(self%handle, Cdata)
+  END SUBROUTINE lmp_gather_angles_small
+
+  ! equivalent function to lammps_gather_angles (LAMMPS_BIGBIG)
+  SUBROUTINE lmp_gather_angles_big(self, data)
+    CLASS(lammps), INTENT(IN) :: self
+    INTEGER(c_int64_t), DIMENSION(:), ALLOCATABLE, TARGET, INTENT(OUT) :: data
+    INTEGER(c_int64_t), POINTER :: nangles
+    TYPE(c_ptr) :: Cdata
+
+    IF (SIZE_TAGINT /= 8_c_int) THEN
+      CALL lmp_error(self, LMP_ERROR_ALL + LMP_ERROR_WORLD, &
+        'Incompatible integer kind in gather_angles [Fortran/gather_angles]')
+    END IF
+    nangles = lmp_extract_global(self, 'nangles')
+    IF (ALLOCATED(data)) DEALLOCATE(data)
+    ALLOCATE(data(4*nangles))
+    Cdata = C_LOC(data(1))
+    CALL lammps_gather_angles(self%handle, Cdata)
+  END SUBROUTINE lmp_gather_angles_big
+
+  ! equivalent function to lammps_gather_dihedrals (LAMMPS_SMALLSMALL or SMALLBIG)
+  SUBROUTINE lmp_gather_dihedrals_small(self, data)
+    CLASS(lammps), INTENT(IN) :: self
+    INTEGER(c_int), DIMENSION(:), ALLOCATABLE, TARGET, INTENT(OUT) :: data
+    INTEGER(c_int), POINTER :: ndihedrals_small
+    INTEGER(c_int64_t), POINTER :: ndihedrals_big
+    TYPE(c_ptr) :: Cdata
+
+    IF (SIZE_TAGINT /= 4_c_int) THEN
+      CALL lmp_error(self, LMP_ERROR_ALL + LMP_ERROR_WORLD, &
+        'Incompatible integer kind in gather_dihedrals [Fortran/gather_dihedrals]')
+    END IF
+    IF (ALLOCATED(data)) DEALLOCATE(data)
+    IF (SIZE_BIGINT == 4_c_int) THEN
+      ndihedrals_small = lmp_extract_global(self, 'ndihedrals')
+      ALLOCATE(data(5*ndihedrals_small))
+    ELSE
+      ndihedrals_big = lmp_extract_global(self, 'ndihedrals')
+      ALLOCATE(data(5*ndihedrals_big))
+    END IF
+    Cdata = C_LOC(data(1))
+    CALL lammps_gather_dihedrals(self%handle, Cdata)
+  END SUBROUTINE lmp_gather_dihedrals_small
+
+  ! equivalent function to lammps_gather_dihedrals (LAMMPS_BIGBIG)
+  SUBROUTINE lmp_gather_dihedrals_big(self, data)
+    CLASS(lammps), INTENT(IN) :: self
+    INTEGER(c_int64_t), DIMENSION(:), ALLOCATABLE, TARGET, INTENT(OUT) :: data
+    INTEGER(c_int64_t), POINTER :: ndihedrals
+    TYPE(c_ptr) :: Cdata
+
+    IF (SIZE_TAGINT /= 8_c_int) THEN
+      CALL lmp_error(self, LMP_ERROR_ALL + LMP_ERROR_WORLD, &
+        'Incompatible integer kind in gather_dihedrals [Fortran/gather_dihedrals]')
+    END IF
+    ndihedrals = lmp_extract_global(self, 'ndihedrals')
+    IF (ALLOCATED(data)) DEALLOCATE(data)
+    ALLOCATE(data(5*ndihedrals))
+    Cdata = C_LOC(data(1))
+    CALL lammps_gather_dihedrals(self%handle, Cdata)
+  END SUBROUTINE lmp_gather_dihedrals_big
+
+  ! equivalent function to lammps_gather_impropers (LAMMPS_SMALLSMALL or SMALLBIG)
+  SUBROUTINE lmp_gather_impropers_small(self, data)
+    CLASS(lammps), INTENT(IN) :: self
+    INTEGER(c_int), DIMENSION(:), ALLOCATABLE, TARGET, INTENT(OUT) :: data
+    INTEGER(c_int), POINTER :: nimpropers_small
+    INTEGER(c_int64_t), POINTER :: nimpropers_big
+    TYPE(c_ptr) :: Cdata
+
+    IF (SIZE_TAGINT /= 4_c_int) THEN
+      CALL lmp_error(self, LMP_ERROR_ALL + LMP_ERROR_WORLD, &
+        'Incompatible integer kind in gather_impropers [Fortran/gather_impropers]')
+    END IF
+    IF (ALLOCATED(data)) DEALLOCATE(data)
+    IF (SIZE_BIGINT == 4_c_int) THEN
+      nimpropers_small = lmp_extract_global(self, 'nimpropers')
+      ALLOCATE(data(5*nimpropers_small))
+    ELSE
+      nimpropers_big = lmp_extract_global(self, 'nimpropers')
+      ALLOCATE(data(5*nimpropers_big))
+    END IF
+    Cdata = C_LOC(data(1))
+    CALL lammps_gather_impropers(self%handle, Cdata)
+  END SUBROUTINE lmp_gather_impropers_small
+
+  ! equivalent function to lammps_gather_impropers (LAMMPS_BIGBIG)
+  SUBROUTINE lmp_gather_impropers_big(self, data)
+    CLASS(lammps), INTENT(IN) :: self
+    INTEGER(c_int64_t), DIMENSION(:), ALLOCATABLE, TARGET, INTENT(OUT) :: data
+    INTEGER(c_int64_t), POINTER :: nimpropers
+    TYPE(c_ptr) :: Cdata
+
+    IF (SIZE_TAGINT /= 8_c_int) THEN
+      CALL lmp_error(self, LMP_ERROR_ALL + LMP_ERROR_WORLD, &
+        'Incompatible integer kind in gather_impropers [Fortran/gather_impropers]')
+    END IF
+    nimpropers = lmp_extract_global(self, 'nimpropers')
+    IF (ALLOCATED(data)) DEALLOCATE(data)
+    ALLOCATE(data(5*nimpropers))
+    Cdata = C_LOC(data(1))
+    CALL lammps_gather_impropers(self%handle, Cdata)
+  END SUBROUTINE lmp_gather_impropers_big
 
   ! equivalent function to lammps_gather (for int data)
   SUBROUTINE lmp_gather_int(self, name, count, data)

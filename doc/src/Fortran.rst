@@ -47,16 +47,14 @@ Fortran code in order to uses the Fortran interface.
 A working example can be found together with equivalent examples in C and
 C++ in the ``examples/COUPLE/simple`` folder of the LAMMPS distribution.
 
-.. versionchanged:: TBD
+.. admonition:: Fortran compiler compatibility
+   :class: note
 
-.. note::
-
-   A contributed Fortran interface interface is available in the
-   ``examples/COUPLE/fortran2`` folder.  However, since the completion
-   of the :f:mod:`LIBLAMMPS` module, this interface is now deprecated,
-   no longer actively maintained and will likely be removed in the
-   future.  Please see the ``README`` file in that folder for more
-   information about it and how to contact its author and maintainer.
+   A fully Fortran 2003 compatible Fortran compiler is required.
+   This means that currently only GNU Fortran 9 and later are
+   compatible and thus the default compilers of Red Hat or CentOS 7
+   and Ubuntu 18.04 LTS and not compatible.  Either newer compilers
+   need to be installed or the Linux updated.
 
 ----------
 
@@ -194,40 +192,62 @@ Below is an example demonstrating some of the possible uses.
 
 .. code-block:: fortran
 
-  PROGRAM testprop
-    USE LIBLAMMPS
-    USE, INTRINSIC :: ISO_C_BINDING, ONLY : c_double, c_int64_t
-    USE, INTRINSIC :: ISO_FORTRAN_ENV, ONLY : OUTPUT_UNIT
-    TYPE(lammps) :: lmp
-    INTEGER(KIND=c_int64_t), POINTER :: natoms
-    REAL(KIND=c_double), POINTER :: dt
-    INTEGER(KIND=c_int64_t), POINTER :: ntimestep
-    REAL(KIND=c_double) :: pe, ke
+   PROGRAM testprop
+     USE LIBLAMMPS
+     USE, INTRINSIC :: ISO_C_BINDING, ONLY : c_double, c_int64_t, c_int
+     USE, INTRINSIC :: ISO_FORTRAN_ENV, ONLY : OUTPUT_UNIT
+     TYPE(lammps) :: lmp
+     INTEGER(KIND=c_int64_t), POINTER :: natoms, ntimestep, bval
+     REAL(KIND=c_double), POINTER :: dt, dval
+     INTEGER(KIND=c_int), POINTER :: nfield, typ, ival
+     INTEGER(KIND=c_int) :: i
+     CHARACTER(LEN=11) :: key
+     REAL(KIND=c_double) :: pe, ke
 
-    lmp = lammps()
-    CALL lmp%file('in.sysinit')
-    natoms = lmp%extract_global('natoms')
-    WRITE(OUTPUT_UNIT,'(A,I0,A)') 'Running a simulation with ', natoms, ' atoms'
-    WRITE(OUTPUT_UNIT,'(I0,A,I0,A,I0,A)') lmp%extract_setting('nlocal'), &
-        ' local and ', lmp%extract_setting('nghost'), ' ghost atoms. ', &
-        lmp%extract_setting('ntypes'), ' atom types'
+     lmp = lammps()
+     CALL lmp%file('in.sysinit')
+     natoms = lmp%extract_global('natoms')
+     WRITE(OUTPUT_UNIT,'(A,I0,A)') 'Running a simulation with ', natoms, ' atoms'
+     WRITE(OUTPUT_UNIT,'(I0,A,I0,A,I0,A)') lmp%extract_setting('nlocal'), &
+         ' local and ', lmp%extract_setting('nghost'), ' ghost atoms. ', &
+         lmp%extract_setting('ntypes'), ' atom types'
 
-    CALL lmp%command('run 2 post no')
-    dt = lmp%extract_global('dt')
-    ntimestep = lmp%extract_global('ntimestep')
-    WRITE(OUTPUT_UNIT,'(A,I0,A,F4.1,A)') 'At step: ', ntimestep, &
-        '  Changing timestep from', dt, ' to 0.5'
-    dt = 0.5_c_double
-    CALL lmp%command('run 2 post no')
+     CALL lmp%command('run 2 post no')
 
-    WRITE(OUTPUT_UNIT,'(A,I0)') 'At step: ', ntimestep
-    pe = lmp%get_thermo('pe')
-    ke = lmp%get_thermo('ke')
-    PRINT*, 'PE = ', pe
-    PRINT*, 'KE = ', ke
+     ntimestep = lmp%last_thermo('step', 0)
+     nfield = lmp%last_thermo('num', 0)
+     WRITE(OUTPUT_UNIT,'(A,I0,A,I0)') 'Last thermo output on step: ', ntimestep, &
+         ',  number of fields: ', nfield
+     DO i=1, nfield
+         key = lmp%last_thermo('keyword',i)
+         typ = lmp%last_thermo('type',i)
+         IF (typ == lmp%dtype%i32) THEN
+             ival = lmp%last_thermo('data',i)
+             WRITE(OUTPUT_UNIT,*) key, ':', ival
+         ELSE IF (typ == lmp%dtype%i64) THEN
+             bval = lmp%last_thermo('data',i)
+             WRITE(OUTPUT_UNIT,*) key, ':', bval
+         ELSE IF (typ == lmp%dtype%r64) THEN
+             dval = lmp%last_thermo('data',i)
+             WRITE(OUTPUT_UNIT,*) key, ':', dval
+         END IF
+     END DO
 
-    CALL lmp%close(.TRUE.)
-  END PROGRAM testprop
+     dt = lmp%extract_global('dt')
+     ntimestep = lmp%extract_global('ntimestep')
+     WRITE(OUTPUT_UNIT,'(A,I0,A,F4.1,A)') 'At step: ', ntimestep, &
+         '  Changing timestep from', dt, ' to 0.5'
+     dt = 0.5_c_double
+     CALL lmp%command('run 2 post no')
+
+     WRITE(OUTPUT_UNIT,'(A,I0)') 'At step: ', ntimestep
+     pe = lmp%get_thermo('pe')
+     ke = lmp%get_thermo('ke')
+     WRITE(OUTPUT_UNIT,*) 'PE = ', pe
+     WRITE(OUTPUT_UNIT,*) 'KE = ', ke
+
+     CALL lmp%close(.TRUE.)
+   END PROGRAM testprop
 
 ---------------
 
@@ -253,6 +273,8 @@ of the contents of the :f:mod:`LIBLAMMPS` Fortran interface to LAMMPS.
    :ftype style: type(lammps_style)
    :f type: derived type to access lammps type constants
    :ftype type: type(lammps_type)
+   :f dtype: derived type to access lammps data type constants
+   :ftype dtype: type(lammps_dtype)
    :f close: :f:subr:`close`
    :ftype close: subroutine
    :f subroutine error: :f:subr:`error`
@@ -269,6 +291,8 @@ of the contents of the :f:mod:`LIBLAMMPS` Fortran interface to LAMMPS.
    :ftype get_natoms: function
    :f get_thermo: :f:func:`get_thermo`
    :ftype get_thermo: function
+   :f last_thermo: :f:func:`last_thermo`
+   :ftype last_thermo: function
    :f extract_box: :f:subr:`extract_box`
    :ftype extract_box: subroutine
    :f reset_box: :f:subr:`reset_box`
@@ -303,6 +327,12 @@ of the contents of the :f:mod:`LIBLAMMPS` Fortran interface to LAMMPS.
    :ftype scatter_atoms_subset: subroutine
    :f gather_bonds: :f:subr:`gather_bonds`
    :ftype gather_bonds: subroutine
+   :f gather_angles: :f:subr:`gather_angles`
+   :ftype gather_angles: subroutine
+   :f gather_dihedrals: :f:subr:`gather_dihedrals`
+   :ftype gather_dihedrals: subroutine
+   :f gather_impropers: :f:subr:`gather_impropers`
+   :ftype gather_impropers: subroutine
    :f gather: :f:subr:`gather`
    :ftype gather: subroutine
    :f gather_concat: :f:subr:`gather_concat`
@@ -572,6 +602,96 @@ Procedures Bound to the :f:type:`lammps` Derived Type
 
 --------
 
+.. f:function:: last_thermo(what, index)
+
+   This function will call :cpp:func:`lammps_last_thermo` and returns
+   either a string or a pointer to a cached copy of LAMMPS last thermodynamic
+   output, depending on the data requested through *what*.  Note that *index*
+   uses 1-based indexing to access thermo output columns.
+
+   .. versionadded:: 15Jun2023
+
+   Note that this function actually does not return a value, but rather
+   associates the pointer on the left side of the assignment to point to
+   internal LAMMPS data (with the exception of string data, which are
+   copied and returned as ordinary Fortran strings).  Pointers must be
+   of the correct data type to point to said data (typically
+   ``INTEGER(c_int)``, ``INTEGER(c_int64_t)``, or ``REAL(c_double)``).
+   The pointer being associated with LAMMPS data is type-checked at
+   run-time via an overloaded assignment operator.  The pointers
+   returned by this function point to temporary, read-only data that may
+   be overwritten at any time, so their target values need to be copied
+   to local storage if they are supposed to persist.
+
+   For example,
+
+   .. code-block:: fortran
+
+      PROGRAM thermo
+        USE LIBLAMMPS
+        USE, INTRINSIC :: ISO_C_BINDING, ONLY : c_double, c_int64_t, c_int
+        TYPE(lammps) :: lmp
+        INTEGER(KIND=c_int64_t), POINTER :: ntimestep, bval
+        REAL(KIND=c_double), POINTER :: dval
+        INTEGER(KIND=c_int), POINTER :: nfield, typ, ival
+        INTEGER(KIND=c_int) :: i
+        CHARACTER(LEN=11) :: key
+
+        lmp = lammps()
+        CALL lmp%file('in.sysinit')
+
+        ntimestep = lmp%last_thermo('step', 0)
+        nfield = lmp%last_thermo('num', 0)
+        PRINT*, 'Last thermo output on step: ', ntimestep, '  Number of fields: ', nfield
+        DO i=1, nfield
+            key = lmp%last_thermo('keyword',i)
+            typ = lmp%last_thermo('type',i)
+            IF (typ == lmp%dtype%i32) THEN
+                ival = lmp%last_thermo('data',i)
+                PRINT*, key, ':', ival
+            ELSE IF (typ == lmp%dtype%i64) THEN
+                bval = lmp%last_thermo('data',i)
+                PRINT*, key, ':', bval
+            ELSE IF (typ == lmp%dtype%r64) THEN
+                dval = lmp%last_thermo('data',i)
+                PRINT*, key, ':', dval
+            END IF
+        END DO
+        CALL lmp%close(.TRUE.)
+      END PROGRAM thermo
+
+   would extract the last timestep where thermo output was done and the number
+   of columns it printed.  Then it loops over the columns to print out column
+   header keywords and the corresponding data.
+
+   .. note::
+
+      If :f:func:`last_thermo` returns a string, the string must have a length
+      greater than or equal to the length of the string (not including the
+      terminal ``NULL`` character) that LAMMPS returns. If the variable's
+      length is too short, the string will be truncated.  As usual in Fortran,
+      strings are padded with spaces at the end.  If you use an allocatable
+      string, the string **must be allocated** prior to calling this function.
+
+   :p character(len=\*) what: string with the name of the thermo keyword
+   :p integer(c_int) index: 1-based column index
+   :to: :cpp:func:`lammps_last_thermo`
+   :r pointer [polymorphic]: pointer to LAMMPS data. The left-hand side of the
+    assignment should be either a string (if expecting string data) or a
+    C-compatible pointer (e.g., ``INTEGER(c_int), POINTER :: nlocal``) to the
+    extracted property.
+
+   .. warning::
+
+       Modifying the data in the location pointed to by the returned pointer
+       may lead to inconsistent internal data and thus may cause failures,
+       crashes, or bogus simulations.  In general, it is much better
+       to use a LAMMPS input command that sets or changes these parameters.
+       Using an input command will take care of all side effects and necessary
+       updates of settings derived from such settings.
+
+--------
+
 .. f:subroutine:: extract_box([boxlo][, boxhi][, xy][, yz][, xz][, pflags][, boxflag])
 
    This subroutine will call :cpp:func:`lammps_extract_box`. All
@@ -749,13 +869,14 @@ Procedures Bound to the :f:type:`lammps` Derived Type
 
    .. note::
 
-      If :f:func:`extract_global` returns a string, the string must have length
-      greater than or equal to the length of the string (not including the
-      terminal ``NULL`` character) that LAMMPS returns. If the variable's
-      length is too short, the string will be truncated. As usual in Fortran,
-      strings are padded with spaces at the end. If you use an allocatable
-      string, the string **must be allocated** prior to calling this function,
-      but you can automatically reallocate it to the correct length after the
+      If :f:func:`extract_global` returns a string, the string must have
+      a length greater than or equal to the length of the string (not
+      including the terminal ``NULL`` character) that LAMMPS returns. If
+      the variable's length is too short, the string will be
+      truncated. As usual in Fortran, strings are padded with spaces at
+      the end. If you use an allocatable string, the string **must be
+      allocated** prior to calling this function, but you can
+      automatically reallocate it to the correct length after the
       function returns, viz.,
 
       .. code-block :: fortran
@@ -1532,6 +1653,51 @@ Procedures Bound to the :f:type:`lammps` Derived Type
 
 --------
 
+.. f:subroutine:: gather_angles(data)
+
+   Gather type and constituent atom information for all angles.
+
+   .. versionadded:: 8Feb2023
+
+   This function copies the list of all angles into an allocatable array.
+   The array will be filled with (angle type, angle atom 1, angle atom 2, angle atom 3)
+   for each angle. The array is allocated to the right length (i.e., four times the
+   number of angles). The array *data* must be of the same type as the LAMMPS
+   ``tagint`` type, which is equivalent to either ``INTEGER(c_int)`` or
+   ``INTEGER(c_int64_t)``, depending on whether ``-DLAMMPS_BIGBIG`` was used
+   when LAMMPS was built. If the supplied array does not match, an error will
+   result at run-time.
+
+   An example of how to use this routine is below:
+
+   .. code-block:: fortran
+
+      PROGRAM angles
+        USE, INTRINSIC :: ISO_C_BINDING, ONLY : c_int
+        USE, INTRINSIC :: ISO_FORTRAN_ENV, ONLY : OUTPUT_UNIT
+        USE LIBLAMMPS
+        IMPLICIT NONE
+        INTEGER(c_int), DIMENSION(:), ALLOCATABLE, TARGET :: angles
+        INTEGER(c_int), DIMENSION(:,:), POINTER :: angles_array
+        TYPE(lammps) :: lmp
+        INTEGER :: i
+        ! other commands to initialize LAMMPS, create angles, etc.
+        CALL lmp%gather_angles(angles)
+        angles_array(1:4, 1:SIZE(angles)/4) => angles
+        DO i = 1, SIZE(angles)/4
+          WRITE(OUTPUT_UNIT,'(A,1X,I4,A,I4,1X,I4,1X,I4)') 'angle', angles_array(1,i), &
+            '; type = ', angles_array(2,i), angles_array(3,i), angles_array(4,i)
+        END DO
+      END PROGRAM angles
+
+   :p data: array into which to copy the result. \*The ``KIND`` parameter is
+    either ``c_int`` or, if LAMMPS was compiled with ``-DLAMMPS_BIGBIG``,
+    kind ``c_int64_t``.
+   :ptype data: integer(kind=\*),allocatable
+   :to: :cpp:func:`lammps_gather_angles`
+
+--------
+
 .. f:subroutine:: gather(self, name, count, data)
 
    Gather the named per-atom, per-atom fix, per-atom compute, or fix
@@ -1571,6 +1737,98 @@ Procedures Bound to the :f:type:`lammps` Derived Type
     (i.e., ``DIMENSION(:)``). If this array is already allocated, it will be
     reallocated to fit the length of the incoming data.
    :to: :cpp:func:`lammps_gather`
+
+--------
+
+.. f:subroutine:: gather_dihedrals(data)
+
+   Gather type and constituent atom information for all dihedrals.
+
+   .. versionadded:: 8Feb2023
+
+   This function copies the list of all dihedrals into an allocatable array.
+   The array will be filled with (dihedral type, dihedral atom 1, dihedral atom 2,
+   dihedral atom 3, dihedral atom 4) for each dihedral. The array is allocated to
+   the right length (i.e., five times the number of dihedrals).
+   The array *data* must be of the same type as the LAMMPS
+   ``tagint`` type, which is equivalent to either ``INTEGER(c_int)`` or
+   ``INTEGER(c_int64_t)``, depending on whether ``-DLAMMPS_BIGBIG`` was used
+   when LAMMPS was built. If the supplied array does not match, an error will
+   result at run-time.
+
+   An example of how to use this routine is below:
+
+   .. code-block:: fortran
+
+      PROGRAM dihedrals
+        USE, INTRINSIC :: ISO_C_BINDING, ONLY : c_int
+        USE, INTRINSIC :: ISO_FORTRAN_ENV, ONLY : OUTPUT_UNIT
+        USE LIBLAMMPS
+        IMPLICIT NONE
+        INTEGER(c_int), DIMENSION(:), ALLOCATABLE, TARGET :: dihedrals
+        INTEGER(c_int), DIMENSION(:,:), POINTER :: dihedrals_array
+        TYPE(lammps) :: lmp
+        INTEGER :: i
+        ! other commands to initialize LAMMPS, create dihedrals, etc.
+        CALL lmp%gather_dihedrals(dihedrals)
+        dihedrals_array(1:5, 1:SIZE(dihedrals)/5) => dihedrals
+        DO i = 1, SIZE(dihedrals)/5
+          WRITE(OUTPUT_UNIT,'(A,1X,I4,A,I4,1X,I4,1X,I4,1X,I4)') 'dihedral', dihedrals_array(1,i), &
+            '; type = ', dihedrals_array(2,i), dihedrals_array(3,i), dihedrals_array(4,i), dihedrals_array(5,i)
+        END DO
+      END PROGRAM dihedrals
+
+   :p data: array into which to copy the result. \*The ``KIND`` parameter is
+    either ``c_int`` or, if LAMMPS was compiled with ``-DLAMMPS_BIGBIG``,
+    kind ``c_int64_t``.
+   :ptype data: integer(kind=\*),allocatable
+   :to: :cpp:func:`lammps_gather_dihedrals`
+
+--------
+
+.. f:subroutine:: gather_impropers(data)
+
+   Gather type and constituent atom information for all impropers.
+
+   .. versionadded:: 8Feb2023
+
+   This function copies the list of all impropers into an allocatable array.
+   The array will be filled with (improper type, improper atom 1, improper atom 2,
+   improper atom 3, improper atom 4) for each improper. The array is allocated to
+   the right length (i.e., five times the number of impropers).
+   The array *data* must be of the same type as the LAMMPS
+   ``tagint`` type, which is equivalent to either ``INTEGER(c_int)`` or
+   ``INTEGER(c_int64_t)``, depending on whether ``-DLAMMPS_BIGBIG`` was used
+   when LAMMPS was built. If the supplied array does not match, an error will
+   result at run-time.
+
+   An example of how to use this routine is below:
+
+   .. code-block:: fortran
+
+      PROGRAM impropers
+        USE, INTRINSIC :: ISO_C_BINDING, ONLY : c_int
+        USE, INTRINSIC :: ISO_FORTRAN_ENV, ONLY : OUTPUT_UNIT
+        USE LIBLAMMPS
+        IMPLICIT NONE
+        INTEGER(c_int), DIMENSION(:), ALLOCATABLE, TARGET :: impropers
+        INTEGER(c_int), DIMENSION(:,:), POINTER :: impropers_array
+        TYPE(lammps) :: lmp
+        INTEGER :: i
+        ! other commands to initialize LAMMPS, create impropers, etc.
+        CALL lmp%gather_impropers(impropers)
+        impropers_array(1:5, 1:SIZE(impropers)/5) => impropers
+        DO i = 1, SIZE(impropers)/5
+          WRITE(OUTPUT_UNIT,'(A,1X,I4,A,I4,1X,I4,1X,I4,1X,I4)') 'improper', impropers_array(1,i), &
+            '; type = ', impropers_array(2,i), impropers_array(3,i), impropers_array(4,i), impropers_array(5,i)
+        END DO
+      END PROGRAM impropers
+
+   :p data: array into which to copy the result. \*The ``KIND`` parameter is
+    either ``c_int`` or, if LAMMPS was compiled with ``-DLAMMPS_BIGBIG``,
+    kind ``c_int64_t``.
+   :ptype data: integer(kind=\*),allocatable
+   :to: :cpp:func:`lammps_gather_impropers`
 
 --------
 
@@ -2003,7 +2261,7 @@ Procedures Bound to the :f:type:`lammps` Derived Type
 
    The LAMMPS :doc:`dump style movie <dump_image>` supports generating movies
    from images on-the-fly via creating a pipe to the
-   `ffmpeg <https://ffmpeg.org/ffmpeg/>`_ program.
+   `ffmpeg <https://ffmpeg.org/>`_ program.
    This function checks whether this feature was
    :ref:`enabled at compile time <graphics>`.
    It does **not** check whether the ``ffmpeg`` itself is installed and usable.
@@ -2020,19 +2278,13 @@ Procedures Bound to the :f:type:`lammps` Derived Type
 
    .. versionadded:: 3Nov2022
 
-   In case of an error, LAMMPS will either abort or throw a C++ exception.
-   The latter has to be :ref:`enabled at compile time <exceptions>`.
-   This function checks if exceptions were enabled.
-
-   When using the library interface with C++ exceptions enabled, the library
-   interface functions will "catch" them, and the error status can then be
-   checked by calling :f:func:`has_error`. The most recent error message can be
-   retrieved via :f:func:`get_last_error_message`.
-   This can allow one to restart a calculation or delete and recreate
-   the LAMMPS instance when a C++ exception occurs.  One application
-   of using exceptions this way is the :ref:`lammps_shell`.  If C++
-   exceptions are disabled and an error happens during a call to
-   LAMMPS or the Fortran API, the application will terminate.
+   When using the library interface, the library interface functions
+   will "catch" exceptions, and then the error status can be checked by
+   calling :f:func:`has_error`.  The most recent error message can be
+   retrieved via :f:func:`get_last_error_message`.  This allows to
+   restart a calculation or delete and recreate the LAMMPS instance when
+   a C++ exception occurs.  One application of using exceptions this way
+   is the :ref:`lammps_shell`.
 
    :to: :cpp:func:`lammps_config_has_exceptions`
    :r has_exceptions:
@@ -2403,7 +2655,7 @@ Procedures Bound to the :f:type:`lammps` Derived Type
    mode. The function should have Fortran language bindings with the following
    interface, which depends on how LAMMPS was compiled:
 
-   .. code-block:: Fortran
+   .. code-block:: fortran
 
       ABSTRACT INTERFACE
         SUBROUTINE external_callback(caller, timestep, ids, x, fexternal)
@@ -2462,7 +2714,7 @@ Procedures Bound to the :f:type:`lammps` Derived Type
       with ``-DLAMMPS_SMALLBIG``) that applies something akin to Hooke's Law
       (with each atom having a different *k* value) is shown below.
 
-      .. code-block:: Fortran
+      .. code-block:: fortran
 
          MODULE stuff
            USE, INTRINSIC :: ISO_C_BINDING, ONLY : c_int, c_double, c_int64_t
@@ -2786,14 +3038,6 @@ Procedures Bound to the :f:type:`lammps` Derived Type
    This function can be used to query if an error inside of LAMMPS
    has thrown a :ref:`C++ exception <exceptions>`.
 
-   .. note::
-
-      This function will always report "no error" when the LAMMPS library
-      has been compiled without ``-DLAMMPS_EXCEPTIONS``, which turns fatal
-      errors aborting LAMMPS into C++ exceptions. You can use the library
-      function :cpp:func:`lammps_config_has_exceptions` to check if this is
-      the case.
-
    :to: :cpp:func:`lammps_has_error`
    :r has_error: ``.TRUE.`` if there is an error.
    :rtype has_error: logical
@@ -2815,13 +3059,6 @@ Procedures Bound to the :f:type:`lammps` Derived Type
    MPI ranks and is often recoverable, while a "2" indicates an abort that
    would happen only in a single MPI rank and thus may not be recoverable, as
    other MPI ranks may be waiting on the failing MPI rank(s) to send messages.
-
-   .. note::
-
-      This function will do nothing when the LAMMPS library has been
-      compiled without ``-DLAMMPS_EXCEPTIONS``, which turns errors aborting
-      LAMMPS into C++ exceptions.  You can use the function
-      :f:func:`config_has_exceptions` to check whether this is the case.
 
    :p character(len=\*) buffer: string buffer to copy the error message into
    :o integer(c_int) status [optional]: 1 when all ranks had the error,

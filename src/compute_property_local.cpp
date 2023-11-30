@@ -380,7 +380,7 @@ int ComputePropertyLocal::count_pairs(int allflag, int forceflag)
   // loop over neighbors of my atoms
   // skip if I or J are not in group
   // for newton = 0 and J = ghost atom,
-  //   need to insure I,J pair is only output by one proc
+  //   need to ensure I,J pair is only output by one proc
   //   use same itag,jtag logic as in Neighbor::neigh_half_nsq()
 
   double **cutsq = force->pair->cutsq;
@@ -405,6 +405,7 @@ int ComputePropertyLocal::count_pairs(int allflag, int forceflag)
       if (!(mask[j] & groupbit)) continue;
 
       // itag = jtag is possible for long cutoffs that include images of self
+      // do not need triclinic logic here b/c neighbor list itself is correct
 
       if (newton_pair == 0 && j >= nlocal) {
         jtag = tag[j];

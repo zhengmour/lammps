@@ -52,8 +52,11 @@ void Replicate::command(int narg, char **arg)
   int nx = utils::inumeric(FLERR,arg[0],false,lmp);
   int ny = utils::inumeric(FLERR,arg[1],false,lmp);
   int nz = utils::inumeric(FLERR,arg[2],false,lmp);
-  int nrep = nx*ny*nz;
+  if ((nx <= 0) || (ny <= 0) || (nz <= 0))
+    error->all(FLERR, "Illegal replication grid {}x{}x{}. All replications must be > 0",
+               nx, ny, nz);
 
+  int nrep = nx*ny*nz;
   if (me == 0)
     utils::logmesg(lmp, "Replication is creating a {}x{}x{} = {} times larger system...\n",
                    nx, ny, nz, nrep);
@@ -278,7 +281,7 @@ void Replicate::command(int narg, char **arg)
 
   // set bounds for my proc
   // if periodic and I am lo/hi proc, adjust bounds by EPSILON
-  // insures all replicated atoms will be owned even with round-off
+  // ensures all replicated atoms will be owned even with round-off
 
   double epsilon[3];
   if (triclinic) epsilon[0] = epsilon[1] = epsilon[2] = EPSILON;

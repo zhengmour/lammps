@@ -180,19 +180,11 @@ discarded but by setting the verbose flag (via setting the ``TEST_ARGS``
 environment variable, ``TEST_ARGS=-v``) it can be printed and used to
 understand why tests fail unexpectedly.
 
-Another complexity of these tests stems from the need to capture
-situations where LAMMPS will stop with an error, i.e. handle so-called
-"death tests".  Here the LAMMPS code will operate differently depending
-on whether it was configured to throw C++ exceptions on errors or call
-either ``exit()`` or ``MPI_Abort()``.  In the latter case, the test code
-also needs to detect whether LAMMPS was compiled with the OpenMPI
-library, as OpenMPI is **only** compatible the death test options of the
-GoogleTest library when C++ exceptions are enabled; otherwise those
-"death tests" must be skipped to avoid reporting bogus failures.  The
-specifics of this step are implemented in the ``TEST_FAILURE()``
-macro. These tests operate by capturing the screen output when executing
-the failing command and then comparing that with a provided regular
-expression string pattern.  Example:
+The specifics of so-called "death tests", i.e. conditions where LAMMPS
+should fail and throw an exception, are implemented in the
+``TEST_FAILURE()`` macro. These tests operate by capturing the screen
+output when executing the failing command and then comparing that with a
+provided regular expression string pattern.  Example:
 
 .. code-block:: c++
 
@@ -489,7 +481,7 @@ to update the YAML files. Running a command like
 
 .. code-block:: bash
 
-   $ test_pair_style mol-pair-lennard_mdf.yaml -g new.yaml
+   test_pair_style mol-pair-lennard_mdf.yaml -g new.yaml
 
 will read the settings from the ``mol-pair-lennard_mdf.yaml`` file and then compute
 the reference data and write a new file with to ``new.yaml``.  If this step fails,
@@ -500,13 +492,13 @@ It is also possible to do an update in place with:
 
 .. code-block:: bash
 
-   $ test_pair_style mol-pair-lennard_mdf.yaml -u
+   test_pair_style mol-pair-lennard_mdf.yaml -u
 
 And one can finally run the full set of tests with:
 
 .. code-block:: bash
 
-   $ test_pair_style mol-pair-lennard_mdf.yaml
+   test_pair_style mol-pair-lennard_mdf.yaml
 
 This will just print a summary of the groups of tests.  When using the "-v" flag
 the test will also keep any LAMMPS output and when using the "-s" flag, there
